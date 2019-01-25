@@ -11,19 +11,22 @@ if (!window.indexedDB) {
 }
 
 var db,timing;
-var request = window.indexedDB.open("Database", 3);
+var request = window.indexedDB.open("Database1", 3);
 request.onerror = function(event) {
-    console.log("error: ");
+    console.log("error: ",event.target);
 };         
 
 request.onsuccess = function(event) {
     db = request.result;
     console.log("success: "+ db);
+    readFromDb();
 };
 
 request.onupgradeneeded = function(event) {
-    var db = event.target.result;
+    db = event.target.result;
+    console.log("hi");
     var objectStore = db.createObjectStore("chats", {keyPath:"id", autoIncrement:true});
+   // readFromDb();
 }
 
 function addSentChat(msg,time){
@@ -102,14 +105,14 @@ for (var i = 0; i < messageTime.length; i++){
 	messageTime[i].innerHTML = moment().format('h:mm A');
 }
 
-var host = "127.0.0.1"	//location.hostname
+var host = location.hostname	//location.hostname
 var wsUri = "ws://"+host+":8000/ws";
 console.log(wsUri);
 var websocket;
 //var noOfUsersOnline = 0;
 
 function init(){
-	readFromDb();
+	//readFromDb();
 	websocket = new WebSocket(wsUri);
     websocket.onopen = function(evt) { onOpen(evt) };
     websocket.onclose = function(evt) { onClose(evt) };
@@ -140,6 +143,8 @@ function onMessage(evt){
     for(var i=1;i<len-1;i++)
     	msg = msg + msgArray[i] + ' ';
     msg = msg + msgArray[len-1];
+    msg = msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    //console.log(msg);
     var message = buildMessageReceived(msg,moment().format('h:mm A'));
 	conversation.appendChild(message);
 	addReceivedChat(msg,timing);
@@ -159,7 +164,10 @@ function newMessage(e) {
 	var input = e.target.input;
 
 	if(input.value){
+		input.value = input.value.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+		//console.log(input.value);
 		var message = buildMessageSent(input.value,moment().format('h:mm A'));
+		console.log(message);
 		conversation.appendChild(message);
 		animateMessage(message);
 		addSentChat(input.value,timing);
