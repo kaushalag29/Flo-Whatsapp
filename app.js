@@ -1,6 +1,17 @@
 var displayAddress = "oKv51tWdZWJyMJfVCtQoTo2FxrPicPtWbe";
 var floidToOnion = {};
 
+window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB;
+   
+window.IDBTransaction = window.IDBTransaction || window.webkitIDBTransaction || 
+window.msIDBTransaction;
+window.IDBKeyRange = window.IDBKeyRange || 
+window.webkitIDBKeyRange || window.msIDBKeyRange
+   
+if (!window.indexedDB) {
+     window.alert("Your browser doesn't support a stable version of IndexedDB.")
+}
+
 function convertStringToInt(string){
   return parseInt(string,10);
 }
@@ -52,7 +63,7 @@ function getTransactionsByPage(address,totalPages){
                         getDataFromTransactions(data["txs"]);
                         cnt++;
                         if(cnt === totalPages)
-                          checkForFloId();
+                          checkIdStorageIndexdb();
                   } catch (error) {
                           console.log(error);
                       }
@@ -94,29 +105,93 @@ function mapIdToOnion(transactionData){
     floidToOnion[key] = transactionData[key];
 }
 
-function checkForFloId(){
-  var floId = prompt("Enter A Valid Flo ID!").toString();
-  while(floidToOnion[floId] === undefined)
-    floId = prompt("Retry!Enter A Valid Flo ID!").toString();
-  //Before Execute Need To Check If A Valid floid exists in indexdb or not!If valid floid exists in indexDb then no fetching from blockchain required
-  executeNow(floId);
+function checkIdStorageIndexdb(){
+  //console.log("Hello");
+  var request = window.indexedDB.open("floDbs", 3);
+  var db,floId;
+  request.onerror = function(event) {
+      console.log("error: ",event.target);
+  };         
+
+  request.onsuccess = function(event) {
+      db = request.result;
+      console.log("success: "+ db);
+
+      var objectStore = db.transaction(["floid"],IDBTransaction.READ_ONLY).objectStore("floid");
+      
+      objectStore.onerror = function(event) {
+        console.log("No Store Found!");
+     }
+
+      objectStore.openCursor().onsuccess = function(event) {
+        var cursor = event.target.result;
+        
+        if (cursor) {
+           floId = cursor.value.id;
+           cursor.continue();
+        } else {
+           console.log("No more entries!");
+           if(floId === undefined){
+            floId = prompt("Enter A Valid Flo ID!").toString();
+            while(floidToOnion[floId] === undefined)
+              floId = prompt("Retry!Enter A Valid Flo ID!").toString();
+            storeFloIdIndexdb(floId);
+        }
+        else
+          executeNow(floId);
+        }
+     };
+
+     objectStore.openCursor().onerror = function(event) {
+        console.log("No entries found!");
+    };
+      
+  };
+
+  request.onupgradeneeded = function(event) {
+      console.log('upgrade');
+      db = event.target.result;
+      var objectStore = db.createObjectStore("floid", {keyPath:"id", autoIncrement:true});
+  }
+
+}
+
+function storeFloIdIndexdb(floId){
+
+  var db;
+  var request = window.indexedDB.open("floDbs", 3);
+  request.onerror = function(event) {
+      console.log("error: ",event.target);
+  };         
+
+  request.onsuccess = function(event) {
+      db = request.result;
+      console.log("success: "+ db);
+      request = db.transaction(["floid"], "readwrite")
+                .objectStore("floid")
+                .add({id:floId});
+     
+     request.onsuccess = function(event) {
+        console.log("Floid has been added to your database.");
+        executeNow(floId);
+     };
+     
+     request.onerror = function(event) {
+        console.log("Unable to add Floid in your database! ");
+     }
+
+  };
+
+  request.onupgradeneeded = function(event) {
+      db = event.target.result;
+      var objectStore = db.createObjectStore("floid", {keyPath:"id", autoIncrement:true});
+  }
+
 }
 
 getTotalPages(displayAddress);
 
 function executeNow(floId){
-
-  window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || 
-  window.msIndexedDB;
-   
-  window.IDBTransaction = window.IDBTransaction || window.webkitIDBTransaction || 
-  window.msIDBTransaction;
-  window.IDBKeyRange = window.IDBKeyRange || 
-  window.webkitIDBKeyRange || window.msIDBKeyRange
-   
-  if (!window.indexedDB) {
-     window.alert("Your browser doesn't support a stable version of IndexedDB.")
-  }
 
   var db,timing;
   var request = window.indexedDB.open("Database1", 3);
