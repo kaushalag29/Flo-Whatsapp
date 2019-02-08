@@ -137,8 +137,8 @@ function checkIdStorageIndexdb(){
               floId = prompt("Retry!Enter A Valid Flo ID!").toString();
             storeFloIdIndexdb(floId);
         }
-        else
-          executeNow(floId);
+           else
+            executeNow(floId);
         }
      };
 
@@ -192,6 +192,31 @@ function storeFloIdIndexdb(floId){
 getTotalPages(displayAddress);
 
 function executeNow(floId){
+
+  for(var key in floidToOnion){
+      if(key !== floId ){
+      var listElement = document.getElementById('contact-list');
+      var createLi = document.createElement('li');
+      createLi.innerHTML = key;
+      listElement.appendChild(createLi);
+    }
+  }
+
+  var ulElement = document.getElementById('contact-list');
+  var prevSelectedElement = '';
+  var recipientId = ''; 
+
+  ulElement.onclick = function(event){
+    event = event || window.event;
+    if(prevSelectedElement !== ''){
+      prevSelectedElement.style.color = "#00ff00";
+    }
+    var target = event.target || event.srcElement;
+    target.style.color = "red";
+    recipientId = target.innerHTML;
+    prevSelectedElement = target;
+    console.log(target.innerHTML);
+  }
 
   var db,timing;
   var request = window.indexedDB.open("Database1", 3);
