@@ -103,6 +103,7 @@ function getDataFromTransactions(txid){
 function mapIdToOnion(transactionData){
   for(var key in transactionData)
     floidToOnion[key] = transactionData[key];
+   // console.log(transactionData);
 }
 
 function checkIdStorageIndexdb(){
@@ -194,6 +195,7 @@ getTotalPages(displayAddress);
 function executeNow(floId){
 
   for(var key in floidToOnion){
+    //console.log(floidToOnion[key]);
       if(key !== floId ){
       var listElement = document.getElementById('contact-list');
       var createLi = document.createElement('li');
@@ -314,8 +316,12 @@ function executeNow(floId){
   var host = location.hostname  //location.hostname
   var wsUri = "ws://"+host+":8000/ws";
   console.log(wsUri);
+  console.log(floidToOnion["id1"]);
+  console.log(floidToOnion["id2"]);
   var websocket;
+  var recipient_websocket;
   //var noOfUsersOnline = 0;
+  init();
 
   function init(){
     //readFromDb();
@@ -328,6 +334,7 @@ function executeNow(floId){
 
   function onOpen(evt){
       console.log("CONNECTED");
+      websocket.send(floId+" ");
       makeOnline();
       //noOfUsersOnline++;
       //console.log("Total Users = "+noOfUsersOnline.toString());
@@ -342,11 +349,11 @@ function executeNow(floId){
   }
 
   function onMessage(evt){
-      console.log(evt);
+      console.log(evt.data);
       var msgArray = evt.data.split(' ');
       var len = msgArray.length;
       var msg = "";
-      for(var i=1;i<len-1;i++)
+      for(var i=2;i<len-1;i++)
         msg = msg + msgArray[i] + ' ';
       msg = msg + msgArray[len-1];
       msg = msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -368,7 +375,7 @@ function executeNow(floId){
 
   function newMessage(e) {
     var input = e.target.input;
-
+    var temp_input = '';
     if(input.value){
       input.value = input.value.replace(/</g, "&lt;").replace(/>/g, "&gt;");
       //console.log(input.value);
@@ -377,9 +384,20 @@ function executeNow(floId){
       conversation.appendChild(message);
       animateMessage(message);
       addSentChat(input.value,timing);
-      websocket.send(input.value);
+      temp_input = input.value;
+      //websocket.send(input.value);
+      if(recipientId === "id1")
+        recipient_websocket = new WebSocket("ws://"+floidToOnion[recipientId]+"/ws");
+      else
+        recipient_websocket = new WebSocket("ws://"+floidToOnion[recipientId]+":8000/ws");
+      recipient_websocket.onopen = function(event){
+        recipient_websocket.send(recipientId+" "+temp_input);
+        //recipient_websocket.close();
+      }
+      recipient_websocket.onerror = function(event){
+        console.log("Message Not Sent To Recipient!Try Again!");
+      }
     }
-    
     input.value = '';
     conversation.scrollTop = conversation.scrollHeight;
 
@@ -436,6 +454,6 @@ function executeNow(floId){
       document.getElementsByClassName('status')[0].innerHTML = "Offline";
   }
 
-  window.addEventListener("load", init, false);
+  //window.addEventListener("load", init, false);
 
 }
