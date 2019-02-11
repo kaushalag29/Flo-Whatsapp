@@ -216,6 +216,8 @@ function executeNow(floId){
     var target = event.target || event.srcElement;
     target.style.color = "red";
     recipientId = target.innerHTML;
+    document.getElementsByClassName('input-msg')[0].setAttribute("placeholder","Type A Message!")
+    document.getElementsByClassName('input-msg')[0].disabled = false;
     prevSelectedElement = target;
     console.log(target.innerHTML);
   }
@@ -377,6 +379,7 @@ function executeNow(floId){
     var input = e.target.input;
     var temp_input = '';
     if(input.value){
+      
       input.value = input.value.replace(/</g, "&lt;").replace(/>/g, "&gt;");
       //console.log(input.value);
       var message = buildMessageSent(input.value,moment().format('h:mm A'));
@@ -386,10 +389,10 @@ function executeNow(floId){
       addSentChat(input.value,timing);
       temp_input = input.value;
       //websocket.send(input.value);
-      if(recipientId === "id1")
-        recipient_websocket = new WebSocket("ws://"+floidToOnion[recipientId]+"/ws");
-      else
+      if(recipientId === "id2")
         recipient_websocket = new WebSocket("ws://"+floidToOnion[recipientId]+":8000/ws");
+      else
+        recipient_websocket = new WebSocket("ws://"+floidToOnion[recipientId]+"/ws");
       recipient_websocket.onopen = function(event){
         recipient_websocket.send(recipientId+" "+temp_input);
         //recipient_websocket.close();
