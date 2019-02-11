@@ -133,10 +133,10 @@ function checkIdStorageIndexdb(){
         } else {
            console.log("No more entries!");
            if(floId === undefined){
-            floId = prompt("Enter A Valid Flo ID!").toString();
+            floId = prompt("Enter A Valid Flo ID!");
             while(floidToOnion[floId] === undefined)
-              floId = prompt("Retry!Enter A Valid Flo ID!").toString();
-            storeFloIdIndexdb(floId);
+              floId = prompt("Retry!Enter A Valid Flo ID!");
+            storeFloIdIndexdb(floId+'');
         }
            else
             executeNow(floId);
@@ -174,7 +174,7 @@ function storeFloIdIndexdb(floId){
      
      request.onsuccess = function(event) {
         console.log("Floid has been added to your database.");
-        executeNow(floId);
+        executeNow(floId+'');
      };
      
      request.onerror = function(event) {
@@ -333,8 +333,8 @@ function executeNow(floId){
   }
 
   function onOpen(evt){
-      console.log("CONNECTED");
-      websocket.send(floId+" ");
+      console.log("CONNECTED",floId);
+      websocket.send(floId+'$');
       makeOnline();
       //noOfUsersOnline++;
       //console.log("Total Users = "+noOfUsersOnline.toString());

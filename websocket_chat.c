@@ -64,13 +64,18 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       struct mg_str d = {(char *) wm->data, wm->size};
 
       char id[101],data[500001];
-
+      printf("%s\n",(char *)wm->data);
       strcpy(data,(char *)wm->data);
-
+      printf("%s\n",data);
       int len = strlen(data);
-
+      int flag=0;
       for(int i=0;i<len;i++)
       {
+          if(data[i] == '$')
+          {
+              flag=1;
+              break;
+          }
           if(data[i] == ' ')
             break;
           id[i] = data[i];
@@ -78,7 +83,7 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
       printf("%s\n",id);
       int len2 = strlen(id);
 
-      if(len2 == len-1)
+      if(len2 == len-1 || flag == 1)
       {
 
         for(int i=0;i<1000;i++)
@@ -92,8 +97,8 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data) {
         }
 
       }
-
-      if(len2 != len-1)
+      //printf("%d %d\n",len2,len-1);
+      if(len2 != len-1 && flag == 0)
         broadcast(nc,d,id);
 
       break;
