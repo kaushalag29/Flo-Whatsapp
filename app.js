@@ -206,7 +206,10 @@ function executeNow(floId){
 
   var ulElement = document.getElementById('contact-list');
   var prevSelectedElement = '';
-  var recipientId = ''; 
+  var recipientId = '';
+  var db,timing;
+  var conversation = document.querySelector('.conversation-container');
+  //requestForDb();//Needed to be fixed
 
   ulElement.onclick = function(event){
     event = event || window.event;
@@ -216,33 +219,65 @@ function executeNow(floId){
     var target = event.target || event.srcElement;
     target.style.color = "red";
     recipientId = target.innerHTML;
-    document.getElementsByClassName('input-msg')[0].setAttribute("placeholder","Type A Message!")
-    document.getElementsByClassName('input-msg')[0].disabled = false;
+    conversation.innerHTML = "";
+    if(db === undefined)
+      requestForDb();
+    else
+    {
+      document.getElementsByClassName('input-msg')[0].setAttribute("placeholder","Type A Message!")
+      document.getElementsByClassName('input-msg')[0].disabled = false;
+      readFromDb(recipientId);
+    }
     prevSelectedElement = target;
     console.log(target.innerHTML);
   }
 
-  var db,timing;
-  var request = window.indexedDB.open("Database1", 3);
-  request.onerror = function(event) {
-      console.log("error: ",event.target);
-  };         
+  
+  function requestForDb(){
+    var request = window.indexedDB.open("Database1", 3);
+    request.onerror = function(event) {
+        console.log("error: ",event.target);
+    };         
 
-  request.onsuccess = function(event) {
-      db = request.result;
-      console.log("success: "+ db);
-      readFromDb();
-  };
+    request.onsuccess = function(event) {
+        db = request.result;
+        console.log("success: "+ db);
+          document.getElementsByClassName('input-msg')[0].setAttribute("placeholder","Type A Message!")
+          document.getElementsByClassName('input-msg')[0].disabled = false;
+          readFromDb(recipientId);
+    };
 
-  request.onupgradeneeded = function(event) {
+    request.onupgradeneeded = function(event) {
       db = event.target.result;
       var objectStore = db.createObjectStore("chats", {keyPath:"id", autoIncrement:true});
+    }
   }
 
-  function addSentChat(msg,time){
+ function requestForUnknownDb(msg,timing,senderId){
+    var request = window.indexedDB.open("Database1", 3);
+    request.onerror = function(event) {
+        console.log("error: ",event.target);
+    };         
+
+    request.onsuccess = function(event) {
+        db = request.result;
+        console.log("success: "+ db);
+        addReceivedChat(msg,timing,senderId);
+    };
+
+    request.onupgradeneeded = function(event) {
+      db = event.target.result;
+      var objectStore = db.createObjectStore("chats", {keyPath:"id", autoIncrement:true});
+    }
+  }
+
+
+  
+
+  function addSentChat(msg,time,selectedId){
     var request = db.transaction(["chats"], "readwrite")
      .objectStore("chats")
-     .add({chat:"S"+msg,moment:time});
+     .add({chat:"S"+selectedId+msg,moment:time});
      
      request.onsuccess = function(event) {
         console.log("Message has been added to your database.");
@@ -253,10 +288,10 @@ function executeNow(floId){
      }
   }
 
-  function addReceivedChat(msg,time){
+  function addReceivedChat(msg,time,selectedId){
     var request = db.transaction(["chats"], "readwrite")
      .objectStore("chats")
-     .add({chat:"R"+msg,moment:time});
+     .add({chat:"R"+selectedId+msg,moment:time});
      
      request.onsuccess = function(event) {
         console.log("Message has been added to your database.");
@@ -267,7 +302,7 @@ function executeNow(floId){
      }
   }
 
-  function readFromDb() {
+  function readFromDb(selectedId) {
     var objectStore = db.transaction(["chats"],IDBTransaction.READ_ONLY).objectStore("chats");
       
       objectStore.onerror = function(event) {
@@ -277,8 +312,17 @@ function executeNow(floId){
         var cursor = event.target.result;
         
         if (cursor) {
-           addChatToFrontEnd(cursor.value.chat,cursor.value.moment);
-           cursor.continue();
+          var len = selectedId.length;
+          var check = 0;
+          for(var i=0;i<len;i++)
+            if(cursor.value.chat[i+1] !== selectedId[i])
+            {
+              check = 1;
+              break;
+            }
+          if(check === 0)
+            addChatToFrontEnd(len,cursor.value.chat,cursor.value.moment);
+          cursor.continue();
         } else {
            console.log("No more entries!");
         }
@@ -289,10 +333,9 @@ function executeNow(floId){
      };
   }
 
-  var conversation = document.querySelector('.conversation-container');
+  function addChatToFrontEnd(selectedIdLen,msg,time){
 
-  function addChatToFrontEnd(msg,time){
-    var orig_msg = msg.substring(1);
+    var orig_msg = msg.substring(1+selectedIdLen);
     if(msg[0] == 'R')
       var message = buildMessageReceived(orig_msg,time);
     else
@@ -355,14 +398,18 @@ function executeNow(floId){
       var msgArray = evt.data.split(' ');
       var len = msgArray.length;
       var msg = "";
-      for(var i=2;i<len-1;i++)
+      for(var i=3;i<len-1;i++)
         msg = msg + msgArray[i] + ' ';
       msg = msg + msgArray[len-1];
       msg = msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
       //console.log(msg);
       var message = buildMessageReceived(msg,moment().format('h:mm A'));
-    conversation.appendChild(message);
-    addReceivedChat(msg,timing);
+    if(msgArray[2] === recipientId)
+      conversation.appendChild(message);
+    if(db === undefined)
+      requestForUnknownDb(msg,timing,msgArray[2]);
+    else
+      addReceivedChat(msg,timing,msgArray[2]);
     animateMessage(message);
     conversation.scrollTop = conversation.scrollHeight;
   }
@@ -384,9 +431,10 @@ function executeNow(floId){
       //console.log(input.value);
       var message = buildMessageSent(input.value,moment().format('h:mm A'));
       console.log(message);
+      addSentChat(input.value,timing,recipientId);
       conversation.appendChild(message);
       animateMessage(message);
-      addSentChat(input.value,timing);
+      
       temp_input = input.value;
       //websocket.send(input.value);
       if(recipientId === "id2")
@@ -394,7 +442,7 @@ function executeNow(floId){
       else
         recipient_websocket = new WebSocket("ws://"+floidToOnion[recipientId]+"/ws");
       recipient_websocket.onopen = function(event){
-        recipient_websocket.send(recipientId+" "+temp_input);
+        recipient_websocket.send(recipientId+" "+floId+" "+temp_input);
         //recipient_websocket.close();
       }
       recipient_websocket.onerror = function(event){
