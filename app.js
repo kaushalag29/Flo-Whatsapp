@@ -218,6 +218,9 @@ function executeNow(floId){
     }
     var target = event.target || event.srcElement;
     target.style.color = "red";
+    var spanTag = target.getElementsByTagName('span')[0];
+    if(spanTag !== undefined)
+      spanTag.parentNode.removeChild(spanTag);
     recipientId = target.innerHTML;
     conversation.innerHTML = "";
     if(db === undefined)
@@ -406,6 +409,31 @@ function executeNow(floId){
       var message = buildMessageReceived(msg,moment().format('h:mm A'));
     if(msgArray[2] === recipientId)
       conversation.appendChild(message);
+    else{
+      //implement badge unread message
+      var contactListElement = document.getElementById('contact-list');
+      //console.log(typeof contactListElement.innerHTML);
+      var items = contactListElement.getElementsByTagName('li');
+      var itemsLen = items.length;
+      for(var i=0;i<itemsLen;i++){
+        if(items[i].innerHTML.startsWith(msgArray[2])){
+          var spanTag = items[i].getElementsByTagName('span')[0];
+          if(spanTag === undefined){
+            var createSpan = document.createElement('span');
+            createSpan.setAttribute("class","button__badge");
+            createSpan.innerHTML = "1";
+            items[i].appendChild(createSpan);
+            break;
+          }
+          else{
+            var counter = parseInt(spanTag.innerHTML);
+            counter++;
+            spanTag.innerHTML = counter+'';
+            break;
+          }
+        }
+      }
+    }
     if(db === undefined)
       requestForUnknownDb(msg,timing,msgArray[2]);
     else

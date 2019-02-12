@@ -408,6 +408,16 @@ body {
   background-color: white;
 }
 
+.button__badge {
+  background-color: grey;
+  border-radius: 5px;
+  color: white;
+  padding: 3px;
+  font-size: 12px;
+  top: 0;
+  right: 0;
+}
+
 /* Small Screens */
 
 @media (max-width: 768px) {
