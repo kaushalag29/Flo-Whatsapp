@@ -118,7 +118,7 @@ function checkIdStorageIndexdb(){
       db = request.result;
       console.log("success: "+ db);
 
-      var objectStore = db.transaction(["floid"],IDBTransaction.READ_ONLY).objectStore("floid");
+      var objectStore = db.transaction(["floid"],"readwrite").objectStore("floid");
       
       objectStore.onerror = function(event) {
         console.log("No Store Found!");
@@ -193,6 +193,8 @@ function storeFloIdIndexdb(floId){
 getTotalPages(displayAddress);
 
 function executeNow(floId){
+
+
 
   for(var key in floidToOnion){
     //console.log(floidToOnion[key]);
@@ -275,7 +277,19 @@ function executeNow(floId){
   }
 
 
-  
+  function addUnsentChat(msg,time,selectedId){
+    var request = db.transaction(["chats"], "readwrite")
+     .objectStore("chats")
+     .add({chat:"U"+selectedId+' '+msg,moment:time});
+     
+     request.onsuccess = function(event) {
+        console.log("Message has been added to your database.");
+     };
+     
+     request.onerror = function(event) {
+        console.log("Unable to add message in your database! ");
+     }
+  }
 
   function addSentChat(msg,time,selectedId){
     var request = db.transaction(["chats"], "readwrite")
@@ -306,7 +320,7 @@ function executeNow(floId){
   }
 
   function readFromDb(selectedId) {
-    var objectStore = db.transaction(["chats"],IDBTransaction.READ_ONLY).objectStore("chats");
+    var objectStore = db.transaction(["chats"],"readwrite").objectStore("chats");
       
       objectStore.onerror = function(event) {
         console.log("No Store Found!");
@@ -315,16 +329,45 @@ function executeNow(floId){
         var cursor = event.target.result;
         
         if (cursor) {
-          var len = selectedId.length;
-          var check = 0;
-          for(var i=0;i<len;i++)
-            if(cursor.value.chat[i+1] !== selectedId[i])
-            {
-              check = 1;
-              break;
+          if(cursor.value.chat[0] === 'U'){
+            console.log(cursor.value.chat);
+            var len = cursor.value.chat.length;
+            var timeSent = cursor.value.moment;
+            var toSendId = '';
+            for(var i=1;i<len;i++){
+              if(cursor.value.chat[i] !== ' ')
+                toSendId = toSendId + cursor.value.chat[i];
+              else
+                break;
             }
-          if(check === 0)
-            addChatToFrontEnd(len,cursor.value.chat,cursor.value.moment);
+            var idLen = toSendId.length;
+            var msgToSend = cursor.value.chat.substring(idLen+2);
+            var req = cursor.delete();
+            req.onsuccess = function() {
+              console.log('Deleted');
+              //time to resend
+              //After deleting ,i also need to add to frontend,time icon to tick
+              //Need to build a msg with no tick and add to conversation
+              console.log(msgToSend,timeSent);
+              var message = buildUnSentMessage(msgToSend,timeSent);
+              conversation.appendChild(message);
+              conversation.scrollTop = conversation.scrollHeight;
+              sendMessage(toSendId+" "+floId+" "+msgToSend,timeSent,message);
+            };
+
+          }
+          else{
+            var len = selectedId.length;
+            var check = 0;
+            for(var i=0;i<len;i++)
+              if(cursor.value.chat[i+1] !== selectedId[i])
+              {
+                check = 1;
+                break;
+              }
+            if(check === 0)
+              addChatToFrontEnd(len,cursor.value.chat,cursor.value.moment);
+          }
           cursor.continue();
         } else {
            console.log("No more entries!");
@@ -341,10 +384,17 @@ function executeNow(floId){
     var orig_msg = msg.substring(1+selectedIdLen);
     if(msg[0] == 'R')
       var message = buildMessageReceived(orig_msg,time);
-    else
+    else if(msg[0] == 'S')
       var message = buildMessageSent(orig_msg,time);
+    else{
+      //unsent chat
+      //i need to remove unsend chat in indexdb and change its status from U to S
+      //build unsent message
+      //sending unsent chat to id 
+      //sendMessage(recipientId+" "+floId+" "+temp_input,recipient_websocket);
+    }
     conversation.appendChild(message);
-    animateMessage(message);
+    //animateMessage(message);
     conversation.scrollTop = conversation.scrollHeight;
   }
 
@@ -438,7 +488,7 @@ function executeNow(floId){
       requestForUnknownDb(msg,timing,msgArray[2]);
     else
       addReceivedChat(msg,timing,msgArray[2]);
-    animateMessage(message);
+    //animateMessage(message);
     conversation.scrollTop = conversation.scrollHeight;
   }
 
@@ -457,18 +507,21 @@ function executeNow(floId){
       
       input.value = input.value.replace(/</g, "&lt;").replace(/>/g, "&gt;");
       //console.log(input.value);
-      var message = buildMessageSent(input.value,moment().format('h:mm A'));
+      var message = buildUnSentMessage(input.value,moment().format('h:mm A'));  //Need to change span tag of build
       console.log(message);
-      addSentChat(input.value,timing,recipientId);
+      
       conversation.appendChild(message);
-      animateMessage(message);
+      //animateMessage(message);
       
       temp_input = input.value;
+      if(document.getElementsByClassName('status')[0].innerHTML === 'Offline'){
+        addUnsentChat(temp_input,timing,recipientId);
+        input.value = '';
+        conversation.scrollTop = conversation.scrollHeight;
+        e.preventDefault();
+        return;
+      }
       //websocket.send(input.value);
-      if(recipientId === "id2")
-        recipient_websocket = new WebSocket("ws://"+floidToOnion[recipientId]+":8000/ws");
-      else
-        recipient_websocket = new WebSocket("ws://"+floidToOnion[recipientId]+"/ws");
       /*recipient_websocket.onopen = function(event){
         recipient_websocket.send(recipientId+" "+floId+" "+temp_input);
         //recipient_websocket.close();
@@ -476,7 +529,7 @@ function executeNow(floId){
       recipient_websocket.onerror = function(event){
         console.log("Message Not Sent To Recipient!Try Again!");
       }*/
-      sendMessage(recipientId+" "+floId+" "+temp_input,recipient_websocket);
+      sendMessage(recipientId+" "+floId+" "+temp_input,timing,message);
     }
     input.value = '';
     conversation.scrollTop = conversation.scrollHeight;
@@ -484,32 +537,40 @@ function executeNow(floId){
     e.preventDefault();
   }
 
-  function sendMessage(msg,ws){
+  function sendMessage(msg,timer,message){
     // Wait until the state of the socket is not ready and send the message when it is...
-    waitForSocketConnection(ws, function(){
-        console.log("message sent!!!");
-        ws.send(msg);
-    });
+    var msgArray = msg.split(' ');
+    var ws;
+    
+    if(msgArray[0] === "id2")
+      ws = new WebSocket("ws://"+floidToOnion[msgArray[0]]+":8000/ws");
+    else
+      ws = new WebSocket("ws://"+floidToOnion[msgArray[0]]+"/ws");
+
+    ws.onopen = function(evt){
+      ws.send(msg);
+      addSentChat(msg.substring(2+msgArray[0].length+msgArray[1].length),timer,msgArray[0]);
+      addTick(message);
+    }
+
+    ws.onerror = function(evt){
+      console.log('error');
+      addUnsentChat(msg.substring(2+msgArray[0].length+msgArray[1].length),timer,msgArray[0]);
+      readFromDb(msgArray[0]);
+    } 
 }
 
-// Make the function wait until the connection is made...
-function waitForSocketConnection(socket, callback){
-    setTimeout(
-        function () {
-            if (socket.readyState === 1) {
-                console.log("Connection is made")
-                if(callback != null){
-                    callback();
-                }
-                return;
+  function buildUnSentMessage(text,time) {
+    var element = document.createElement('div');
+    timing = time;
+    element.classList.add('message', 'sent');
 
-            } else {
-                console.log("wait for connection...")
-                waitForSocketConnection(socket, callback);
-            }
+    element.innerHTML = text +
+      '<span class="metadata">' +
+        '<span class="time">' + time + '</span>' + '<span data-icon="msg-time" class="unsend_msg"><svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 15" width="16" height="15"><path fill="#859479" d="M9.75 7.713H8.244V5.359a.5.5 0 0 0-.5-.5H7.65a.5.5 0 0 0-.5.5v2.947a.5.5 0 0 0 .5.5h.094l.003-.001.003.002h2a.5.5 0 0 0 .5-.5v-.094a.5.5 0 0 0-.5-.5zm0-5.263h-3.5c-1.82 0-3.3 1.48-3.3 3.3v3.5c0 1.82 1.48 3.3 3.3 3.3h3.5c1.82 0 3.3-1.48 3.3-3.3v-3.5c0-1.82-1.48-3.3-3.3-3.3zm2 6.8a2 2 0 0 1-2 2h-3.5a2 2 0 0 1-2-2v-3.5a2 2 0 0 1 2-2h3.5a2 2 0 0 1 2 2v3.5z"></path></svg></span>';
 
-        }, 5); // wait 5 milisecond for the connection...
-}
+    return element;
+  }
 
   function buildMessageSent(text,time) {
     var element = document.createElement('div');
@@ -551,6 +612,37 @@ function waitForSocketConnection(socket, callback){
       tick.classList.remove('tick-animation');
     }, 500);
   }
+
+  function addTick(message) {
+    setTimeout(function() {
+      var timerElement = message.querySelector('.unsend_msg');
+      timerElement.outerHTML =  '<span class="tick tick-animation">' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="15" id="msg-dblcheck" x="2047" y="2061"><path d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.88a.32.32 0 0 1-.484.032l-.358-.325a.32.32 0 0 0-.484.032l-.378.48a.418.418 0 0 0 .036.54l1.32 1.267a.32.32 0 0 0 .484-.034l6.272-8.048a.366.366 0 0 0-.064-.512zm-4.1 0l-.478-.372a.365.365 0 0 0-.51.063L4.566 9.88a.32.32 0 0 1-.484.032L1.892 7.77a.366.366 0 0 0-.516.005l-.423.433a.364.364 0 0 0 .006.514l3.255 3.185a.32.32 0 0 0 .484-.033l6.272-8.048a.365.365 0 0 0-.063-.51z" fill="#92a58c"/></svg>' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="15" id="msg-dblcheck-ack" x="2063" y="2076"><path d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.88a.32.32 0 0 1-.484.032l-.358-.325a.32.32 0 0 0-.484.032l-.378.48a.418.418 0 0 0 .036.54l1.32 1.267a.32.32 0 0 0 .484-.034l6.272-8.048a.366.366 0 0 0-.064-.512zm-4.1 0l-.478-.372a.365.365 0 0 0-.51.063L4.566 9.88a.32.32 0 0 1-.484.032L1.892 7.77a.366.366 0 0 0-.516.005l-.423.433a.364.364 0 0 0 .006.514l3.255 3.185a.32.32 0 0 0 .484-.033l6.272-8.048a.365.365 0 0 0-.063-.51z" fill="#4fc3f7"/></svg>' +
+        '</span>' +
+      '</span>';
+      //tick.classList.remove('tick-animation');
+    }, 500);
+  }
+
+ /* window.addEventListener('load', function(e) {
+  if (navigator.onLine) {
+    makeOnline();
+  } else {
+    makeOffline();
+  }
+}, false);*/
+
+  window.addEventListener('online', function(e) {
+    console.log('And we\'re back :).');
+    readFromDb(recipientId);
+    makeOnline();
+  }, false);
+
+  window.addEventListener('offline', function(e) {
+    console.log('Connection is down.');
+    makeOffline();
+  }, false);
 
   function makeOnline(){
     console.log(document.getElementsByClassName('status')[0]);
