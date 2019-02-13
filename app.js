@@ -469,19 +469,47 @@ function executeNow(floId){
         recipient_websocket = new WebSocket("ws://"+floidToOnion[recipientId]+":8000/ws");
       else
         recipient_websocket = new WebSocket("ws://"+floidToOnion[recipientId]+"/ws");
-      recipient_websocket.onopen = function(event){
+      /*recipient_websocket.onopen = function(event){
         recipient_websocket.send(recipientId+" "+floId+" "+temp_input);
         //recipient_websocket.close();
       }
       recipient_websocket.onerror = function(event){
         console.log("Message Not Sent To Recipient!Try Again!");
-      }
+      }*/
+      sendMessage(recipientId+" "+floId+" "+temp_input,recipient_websocket);
     }
     input.value = '';
     conversation.scrollTop = conversation.scrollHeight;
 
     e.preventDefault();
   }
+
+  function sendMessage(msg,ws){
+    // Wait until the state of the socket is not ready and send the message when it is...
+    waitForSocketConnection(ws, function(){
+        console.log("message sent!!!");
+        ws.send(msg);
+    });
+}
+
+// Make the function wait until the connection is made...
+function waitForSocketConnection(socket, callback){
+    setTimeout(
+        function () {
+            if (socket.readyState === 1) {
+                console.log("Connection is made")
+                if(callback != null){
+                    callback();
+                }
+                return;
+
+            } else {
+                console.log("wait for connection...")
+                waitForSocketConnection(socket, callback);
+            }
+
+        }, 5); // wait 5 milisecond for the connection...
+}
 
   function buildMessageSent(text,time) {
     var element = document.createElement('div');
