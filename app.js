@@ -211,20 +211,35 @@ function executeNow(floId){
   var recipientId = '';
   var db,timing;
   var conversation = document.querySelector('.conversation-container');
+  var isNetwork;
   //requestForDb();//Needed to be fixed
+
+  if (navigator.onLine) {
+    isNetwork = 1;
+  } else {
+    isNetwork = 0;
+  }
 
   ulElement.onclick = function(event){
     event = event || window.event;
+    var target = event.target || event.srcElement;
+    console.log(target);
+    if(target.getAttribute("class") === "button__badge")
+      return;
     if(prevSelectedElement !== ''){
       prevSelectedElement.style.color = "#00ff00";
     }
-    var target = event.target || event.srcElement;
+    
     target.style.color = "red";
     var spanTag = target.getElementsByTagName('span')[0];
     if(spanTag !== undefined)
       spanTag.parentNode.removeChild(spanTag);
     recipientId = target.innerHTML;
-    conversation.innerHTML = "";
+    document.getElementsByClassName('user')[0].innerHTML = recipientId+'';
+    //Determine Network Status Of Recipient
+    makeOffline();
+    addNetworkStatusOfRecipient(recipientId);
+    //conversation.innerHTML = "";
     if(db === undefined)
       requestForDb();
     else
@@ -237,6 +252,25 @@ function executeNow(floId){
     console.log(target.innerHTML);
   }
 
+  function addNetworkStatusOfRecipient(recipientId){
+    var checkSocket;
+    if(recipientId == 'id2')
+      checkSocket = new WebSocket("ws://"+floidToOnion[recipientId]+":8000/ws");
+    else
+      checkSocket = new WebSocket("ws://"+floidToOnion[recipientId]+"/ws");
+    checkSocket.onopen = function(event){
+      makeOnline();
+    };
+    checkSocket.onclose = function(event){
+      makeOffline();
+    };
+    checkSocket.onerror = function(event){
+      makeOffline();
+      console.log('error network');
+      if(isNetwork === 1)
+        addNetworkStatusOfRecipient(recipientId);
+    };
+  }
   
   function requestForDb(){
     var request = window.indexedDB.open("Database1", 3);
@@ -320,6 +354,8 @@ function executeNow(floId){
   }
 
   function readFromDb(selectedId) {
+    conversation.innerHTML = "";
+    console.log("Bllllllllllllllllllllllllaaaaaaaaaaank");
     var objectStore = db.transaction(["chats"],"readwrite").objectStore("chats");
       
       objectStore.onerror = function(event) {
@@ -342,16 +378,18 @@ function executeNow(floId){
             }
             var idLen = toSendId.length;
             var msgToSend = cursor.value.chat.substring(idLen+2);
+            var message = buildUnSentMessage(msgToSend,timeSent);
+            //console.log("APPENDED",message);
+            conversation.appendChild(message);
+            conversation.scrollTop = conversation.scrollHeight;
             var req = cursor.delete();
             req.onsuccess = function() {
               console.log('Deleted');
               //time to resend
               //After deleting ,i also need to add to frontend,time icon to tick
               //Need to build a msg with no tick and add to conversation
-              console.log(msgToSend,timeSent);
-              var message = buildUnSentMessage(msgToSend,timeSent);
-              conversation.appendChild(message);
-              conversation.scrollTop = conversation.scrollHeight;
+              //console.log(msgToSend,timeSent);
+              
               sendMessage(toSendId+" "+floId+" "+msgToSend,timeSent,message);
             };
 
@@ -386,13 +424,7 @@ function executeNow(floId){
       var message = buildMessageReceived(orig_msg,time);
     else if(msg[0] == 'S')
       var message = buildMessageSent(orig_msg,time);
-    else{
-      //unsent chat
-      //i need to remove unsend chat in indexdb and change its status from U to S
-      //build unsent message
-      //sending unsent chat to id 
-      //sendMessage(recipientId+" "+floId+" "+temp_input,recipient_websocket);
-    }
+    console.log("APPENDED",message);
     conversation.appendChild(message);
     //animateMessage(message);
     conversation.scrollTop = conversation.scrollHeight;
@@ -406,6 +438,12 @@ function executeNow(floId){
   setInterval(function(){
     deviceTime.innerHTML = moment().format('h:mm');
   }, 1000);
+
+  setInterval(function(){
+    console.log("Checking network status after 1 min");
+    if(recipientId !== '' && isNetwork === 1)
+      addNetworkStatusOfRecipient(recipientId);
+  },80000);
 
   for (var i = 0; i < messageTime.length; i++){
     messageTime[i].innerHTML = moment().format('h:mm A');
@@ -433,15 +471,15 @@ function executeNow(floId){
   function onOpen(evt){
       console.log("CONNECTED",floId);
       websocket.send(floId+'$');
-      makeOnline();
+      //makeOnline();
       //noOfUsersOnline++;
       //console.log("Total Users = "+noOfUsersOnline.toString());
-      document.getElementsByClassName('user')[0].innerHTML = host+'';
+      //document.getElementsByClassName('user')[0].innerHTML = host+'';
   }
 
   function onClose(evt){
       console.log("DISCONNECTED");
-      makeOffline();
+      //makeOffline();
       //noOfUsersOnline--;
       //console.log("Total Users = "+noOfUsersOnline.toString());
   }
@@ -509,12 +547,13 @@ function executeNow(floId){
       //console.log(input.value);
       var message = buildUnSentMessage(input.value,moment().format('h:mm A'));  //Need to change span tag of build
       console.log(message);
-      
+      console.log("APPENDED",message);
       conversation.appendChild(message);
       //animateMessage(message);
-      
+      console.log("Network Status",isNetwork);
       temp_input = input.value;
-      if(document.getElementsByClassName('status')[0].innerHTML === 'Offline'){
+      if(isNetwork === 0){
+        console.log("Network Status Offline");
         addUnsentChat(temp_input,timing,recipientId);
         input.value = '';
         conversation.scrollTop = conversation.scrollHeight;
@@ -540,23 +579,37 @@ function executeNow(floId){
   function sendMessage(msg,timer,message){
     // Wait until the state of the socket is not ready and send the message when it is...
     var msgArray = msg.split(' ');
-    var ws;
-    
+    var ws,send_check = 0;
+    console.log('check');
     if(msgArray[0] === "id2")
       ws = new WebSocket("ws://"+floidToOnion[msgArray[0]]+":8000/ws");
     else
       ws = new WebSocket("ws://"+floidToOnion[msgArray[0]]+"/ws");
 
     ws.onopen = function(evt){
+      console.log('open');
       ws.send(msg);
+      send_check = 1;
       addSentChat(msg.substring(2+msgArray[0].length+msgArray[1].length),timer,msgArray[0]);
       addTick(message);
     }
-
+    ws.onclose = function(evt){
+      console.log("connection closed");
+       if(network === 1 && send_check === 0){
+        sendMessage(msg,timer,message);
+        return;
+      }
+      addUnsentChat(msg.substring(2+msgArray[0].length+msgArray[1].length),timer,msgArray[0]);       
+    }
     ws.onerror = function(evt){
       console.log('error');
+      if(isNetwork === 1){
+        sendMessage(msg,timer,message);
+        return;
+      }
       addUnsentChat(msg.substring(2+msgArray[0].length+msgArray[1].length),timer,msgArray[0]);
-      readFromDb(msgArray[0]);
+      //conversation.innerHTML = "";
+      //readFromDb(msgArray[0]);
     } 
 }
 
@@ -625,23 +678,25 @@ function executeNow(floId){
     }, 500);
   }
 
- /* window.addEventListener('load', function(e) {
-  if (navigator.onLine) {
-    makeOnline();
-  } else {
-    makeOffline();
-  }
-}, false);*/
-
   window.addEventListener('online', function(e) {
     console.log('And we\'re back :).');
-    readFromDb(recipientId);
-    makeOnline();
+    //conversation.innerHTML = "";
+    if(recipientId !== '' && recipientId !== undefined){
+      addNetworkStatusOfRecipient(recipientId);
+      readFromDb(recipientId);
+    }
+    //makeOnline();
+    isNetwork = 1;
+    //alert('You Have Been Disconnected!');
+    //window.location.href = floidToOnion[floId];
   }, false);
 
   window.addEventListener('offline', function(e) {
     console.log('Connection is down.');
-    makeOffline();
+    //makeOffline();
+    if(recipientId !== '' && recipientId !== undefined)
+      document.getElementsByClassName('status')[0].innerHTML = "Unknown";
+    isNetwork = 0;
   }, false);
 
   function makeOnline(){
