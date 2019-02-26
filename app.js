@@ -212,6 +212,7 @@ function executeNow(floId){
   var db,timing;
   var conversation = document.querySelector('.conversation-container');
   var isNetwork;
+  var recursion_called;
   //requestForDb();//Needed to be fixed
 
   if (navigator.onLine) {
@@ -232,8 +233,11 @@ function executeNow(floId){
     
     target.style.color = "red";
     var spanTag = target.getElementsByTagName('span')[0];
-    if(spanTag !== undefined)
+    if(spanTag !== undefined){
       spanTag.parentNode.removeChild(spanTag);
+      //send to selected id from floid to add blue tick to chats of floid in selectedid user
+
+    }
     recipientId = target.innerHTML;
     document.getElementsByClassName('user')[0].innerHTML = recipientId+'';
     //Determine Network Status Of Recipient
@@ -246,6 +250,7 @@ function executeNow(floId){
     {
       document.getElementsByClassName('input-msg')[0].setAttribute("placeholder","Type A Message!")
       document.getElementsByClassName('input-msg')[0].disabled = false;
+      recursion_called = 0;
       readFromDb(recipientId);
     }
     prevSelectedElement = target;
@@ -266,9 +271,11 @@ function executeNow(floId){
     };
     checkSocket.onerror = function(event){
       makeOffline();
+      if(isNetwork === 0)
+        document.getElementsByClassName('status')[0].innerHTML = "Unknown";
       console.log('error network');
-      if(isNetwork === 1)
-        addNetworkStatusOfRecipient(recipientId);
+      //if(isNetwork === 1)
+        //addNetworkStatusOfRecipient(recipientId);
     };
   }
   
@@ -317,7 +324,7 @@ function executeNow(floId){
      .add({chat:"U"+selectedId+' '+msg,moment:time});
      
      request.onsuccess = function(event) {
-        console.log("Message has been added to your database.");
+        console.log("UnsentMessage has been added to your database.");
      };
      
      request.onerror = function(event) {
@@ -376,22 +383,25 @@ function executeNow(floId){
               else
                 break;
             }
-            var idLen = toSendId.length;
-            var msgToSend = cursor.value.chat.substring(idLen+2);
-            var message = buildUnSentMessage(msgToSend,timeSent);
-            //console.log("APPENDED",message);
-            conversation.appendChild(message);
-            conversation.scrollTop = conversation.scrollHeight;
-            var req = cursor.delete();
-            req.onsuccess = function() {
-              console.log('Deleted');
-              //time to resend
-              //After deleting ,i also need to add to frontend,time icon to tick
-              //Need to build a msg with no tick and add to conversation
-              //console.log(msgToSend,timeSent);
-              
-              sendMessage(toSendId+" "+floId+" "+msgToSend,timeSent,message);
-            };
+            console.log(recipientId+" checking "+toSendId);
+            if(toSendId === recipientId){
+              var idLen = toSendId.length;
+              var msgToSend = cursor.value.chat.substring(idLen+2);
+              var message = buildUnSentMessage(msgToSend,timeSent);
+              //console.log("APPENDED",message);
+              conversation.appendChild(message);
+              conversation.scrollTop = conversation.scrollHeight;
+              var req = cursor.delete();
+              req.onsuccess = function() {
+                console.log('Deleted');
+                //time to resend
+                //After deleting ,i also need to add to frontend,time icon to tick
+                //Need to build a msg with no tick and add to conversation
+                //console.log(msgToSend,timeSent);
+                recursion_called = 0;
+                sendMessage(toSendId+" "+floId+" "+msgToSend,timeSent,message);
+              };
+            }
 
           }
           else{
@@ -433,16 +443,21 @@ function executeNow(floId){
   var deviceTime = document.querySelector('.status-bar .time');
   var messageTime = document.querySelectorAll('.message .time');
 
-  deviceTime.innerHTML = moment().format('h:mm');
+  deviceTime.innerHTML = moment().format('h:mm A');
 
   setInterval(function(){
-    deviceTime.innerHTML = moment().format('h:mm');
+    deviceTime.innerHTML = moment().format('h:mm A');
   }, 1000);
 
   setInterval(function(){
     console.log("Checking network status after 1 min");
     if(recipientId !== '' && isNetwork === 1)
       addNetworkStatusOfRecipient(recipientId);
+    console.log(recursion_called);
+    if(recursion_called === 6){
+      recursion_called = 0;
+      readFromDb(recipientId);
+    }
   },80000);
 
   for (var i = 0; i < messageTime.length; i++){
@@ -495,8 +510,10 @@ function executeNow(floId){
       msg = msg.replace(/</g, "&lt;").replace(/>/g, "&gt;");
       //console.log(msg);
       var message = buildMessageReceived(msg,moment().format('h:mm A'));
-    if(msgArray[2] === recipientId)
+    if(msgArray[2] === recipientId){
       conversation.appendChild(message);
+      //add blue tick to the sender of received message
+    }
     else{
       //implement badge unread message
       var contactListElement = document.getElementById('contact-list');
@@ -568,6 +585,7 @@ function executeNow(floId){
       recipient_websocket.onerror = function(event){
         console.log("Message Not Sent To Recipient!Try Again!");
       }*/
+      recursion_called = 0;
       sendMessage(recipientId+" "+floId+" "+temp_input,timing,message);
     }
     input.value = '';
@@ -590,12 +608,14 @@ function executeNow(floId){
       console.log('open');
       ws.send(msg);
       send_check = 1;
+      recursion_called = 0;
       addSentChat(msg.substring(2+msgArray[0].length+msgArray[1].length),timer,msgArray[0]);
       addTick(message);
     }
     ws.onclose = function(evt){
       console.log("connection closed");
-       if(network === 1 && send_check === 0){
+       if(network === 1 && send_check === 0 && recursion_called <= 5){
+        recursion_called++;
         sendMessage(msg,timer,message);
         return;
       }
@@ -603,7 +623,8 @@ function executeNow(floId){
     }
     ws.onerror = function(evt){
       console.log('error');
-      if(isNetwork === 1){
+      if(isNetwork === 1 && send_check === 0 && recursion_called <= 5){
+        recursion_called++;
         sendMessage(msg,timer,message);
         return;
       }
@@ -659,7 +680,7 @@ function executeNow(floId){
     return element;
   }
 
-  function animateMessage(message) {
+  function blueTickMessage(message) {
     setTimeout(function() {
       var tick = message.querySelector('.tick');
       tick.classList.remove('tick-animation');
