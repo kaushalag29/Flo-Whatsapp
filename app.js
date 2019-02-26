@@ -212,7 +212,7 @@ function executeNow(floId){
   var db,timing;
   var conversation = document.querySelector('.conversation-container');
   var isNetwork;
-  var recursion_called;
+  var recursion_called,blueTickFlag = 0;
   //requestForDb();//Needed to be fixed
 
   if (navigator.onLine) {
@@ -502,6 +502,9 @@ function executeNow(floId){
   function onMessage(evt){
       console.log(evt.data);
       var msgArray = evt.data.split(' ');
+      console.log("Message Received ",msgArray);
+      if(msgArray[1] !== floId)
+        return;
       var len = msgArray.length;
       var msg = "";
       for(var i=3;i<len-1;i++)
