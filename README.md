@@ -23,6 +23,8 @@ Send in this format and Plz don't use "id2" for now....
 3. Download mongoose server https://github.com/cesanta/mongoose
 Copy all files of html,css,js and websocket_chat.c in examples/websocket_chat folder in mongoose dir.
 use "make" command to create binary file of websocket_chat.
+
+### You can watch video demonstration also using this link https://youtu.be/60gcBO0bcVQ
 4. Start Tor Service using sudo service tor start after setting up your onion service url.
 5. Set your system socks5 proxy settings to 127.0.0.1:9050(The port on which tor service runs)  
 6. Run Binary file of websocket_chat using command (./websocket_chat)
